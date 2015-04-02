@@ -6,6 +6,7 @@
 'use strict';
 
 describe("Scope", function(){
+    //scope应该是简单对象
     it("constructed and used as an object", function(){
         var scope = new Scope();
 
@@ -21,6 +22,7 @@ describe("Scope", function(){
             scope = new Scope();
         });
 
+        //$digest执行时监听器能被执行至少一次
         it("calls the listener function of a watch on first $digest", function(){
             var watchFn = function(){
                 return "wat";
@@ -34,6 +36,8 @@ describe("Scope", function(){
             expect(listenerFn).toHaveBeenCalled();
 
         });
+
+        //watcher的参数为scope
         it("calls the watcher with the scope as the argument", function(){
             var watchFn = jasmine.createSpy();
             var listenerFn = function(){};
@@ -44,6 +48,8 @@ describe("Scope", function(){
 
             expect(watchFn).toHaveBeenCalledWith(scope);
         });
+
+        //当watcher值发生变化时，listener能得到执行
         it("calls the listener function when the watched value changes", function(){
             scope.foo = "a";
             scope.counter = 0;
@@ -57,6 +63,7 @@ describe("Scope", function(){
 
             scope.$digest();
 
+            //至少执行一次listener
             expect(scope.counter).toBe(1);
 
             scope.$digest();
@@ -69,6 +76,7 @@ describe("Scope", function(){
 
             scope.$digest();
 
+            //脏时执行第二次
             expect(scope.counter).toBe(2);
         });
 
@@ -85,6 +93,7 @@ describe("Scope", function(){
             expect(scope.counter).toBe(1);
         });
 
+        //初次调用listener时，oldValue值应该是newValue(即当前value)
         it("calls listerner with newValue as oldValue the first time", function(){
             scope.foo = "a";
             var oldValueGiven;
@@ -186,7 +195,7 @@ describe("Scope", function(){
                 scope.$digest();
             }).toThrow();
         });
-/*
+
         it("ends the digest when the last watch is clean", function(){
             scope.array = _.range(100);
 
@@ -210,8 +219,116 @@ describe("Scope", function(){
             scope.$digest();
 
             expect(watchExecution).toBe(301);
-        });*/
+        });
+        /*
+        * 第一轮脏检测执行listener时会将外层watcher认为是lastDirty，但是listenerFn中又注册了新的watcher
+        * 第二轮脏检测时到lastDirty就会停下来，忽略掉新的watcher
+        * 解决方案是$watch时重置$$lastDirtyWatch
+        * */
+        it("does not end digest so that new watches are not run", function(){
+            scope.foo = "abc";
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){return scope.foo;},
+                function(newV, oldV, scope){
+                    scope.$watch(
+                        function(scope){return scope.foo;},
+                        function(newV, oldV, scope){
+                            scope.counter++;
+                        }
+                    )
+                }
+            );
+            scope.$digest();
+            expect(scope.counter).toBe(1);
+        });
+
+        it("compare based on value if enabled", function(){
+            scope.arr = [1, 2, 3];
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){
+                    return scope.arr;
+                },
+                function(newValue, oldValue, scope){
+                    scope.counter++;
+                },
+                true
+            );
+            scope.$digest();
+
+            expect(scope.counter).toBe(1);
+
+            scope.arr.push(4);
+
+            scope.$digest();
+            expect(scope.counter).toBe(2);
+        });
+
+        it("correctly handles NaNs", function(){
+            scope.number = 0/0;
+
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){
+                    return scope.number;
+                },
+                function(newValue, oldValue, scope){
+                    scope.counter++;
+                }
+            );
+
+            scope.$digest();
+
+            expect(scope.counter).toBe(1);
+        });
+
+        it("execute $eval'ed function and returns result", function(){
+            scope.foo = 10;
+
+            var result = scope.$eval(function(scope){
+                return scope.foo;
+            });
+
+            expect(result).toBe(10);
+        });
+
+        it("passes the second $eval argument straight through", function(){
+            scope.aValue = 10;
+
+            var result = scope.$eval(function(scope, arg){
+                return scope.aValue + arg;
+            }, 1);
+
+            expect(result).toBe(11);
+        });
+
+        it("executes $apply'ed function and starts the digest", function(){
+            scope.foo = "foo";
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){return scope.foo;},
+                function(newValue, oldValue, scope){
+                    scope.counter++;
+                }
+            );
+
+            scope.$digest();
+
+            expect(scope.counter).toBe(1);
+
+            scope.$apply(function(scope){
+                scope.foo = "bar";
+            });
+
+            expect(scope.counter).toBe(2);
+        });
     });
+
 
 
 });
