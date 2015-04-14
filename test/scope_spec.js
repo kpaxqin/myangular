@@ -410,6 +410,56 @@ describe("Scope", function(){
             expect(function(){scope.$digest();}).toThrow();
 
         });
+
+        it("phase", function(){
+            scope.aValue = [1];
+
+            scope.phaseInWatch = undefined;
+            scope.phaseInListener = undefined;
+            scope.phaseInApply = undefined;
+
+            scope.$watch(
+                function(scope){
+                    scope.phaseInWatch = scope.$$phase;
+                    return scope.aValue;
+                },
+                function(newValuem, oldValue, scope){
+                    scope.phaseInListener = scope.$$phase;
+                }
+            );
+
+            scope.$digest();
+
+            scope.$apply(function(scope){
+                scope.phaseInApply = scope.$$phase;
+            });
+
+            expect(scope.phaseInWatch).toBe("$digest");
+            expect(scope.phaseInListener).toBe("$digest");
+            expect(scope.phaseInApply).toBe("$apply");
+        });
+
+        it("schedules a digest in $evalAsync", function(done){
+            scope.aValue = "abc";
+
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){
+                    return scope.aValue;
+                },
+                function(newValue, oldValue, scope){
+                    scope.counter++;
+                }
+            );
+
+            scope.$evalAsync(function(scope){});
+
+            setTimeout(function(){
+                expect(scope.counter).toBe(1);
+                done();
+            });
+        });
     });
 
 

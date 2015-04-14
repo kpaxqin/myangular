@@ -54,6 +54,8 @@ Scope.prototype.$digest = function(){
     var dirty,
         ttl = 10;//脏检测上限次数
 
+    this.$$beginPhase("$digest");
+
     //每次digest都清空lastDirty
     this.$$lastDirtyWatch = null;
     do{
@@ -66,9 +68,12 @@ Scope.prototype.$digest = function(){
 
         //到达脏检测次数限制，放弃本次脏检测并抛出异常
         if ((dirty || this.$$asyncQueue.length) && !(ttl--)){
+            this.$$clearPhase();
             throw new Error("10 digest reached");
         }
     }while(dirty || this.$$asyncQueue.length);
+
+    this.$$clearPhase();
 };
 Scope.prototype.$eval = function(expr, arg){
     return expr(this, arg);
@@ -76,13 +81,24 @@ Scope.prototype.$eval = function(expr, arg){
 
 Scope.prototype.$apply = function(expr){
     try{
+        this.$$beginPhase("$apply");
         return this.$eval(expr);
     }finally{
+        this.$$clearPhase();
         this.$digest();
     }
 };
 
 Scope.prototype.$evalAsync = function(expr){
+    var self = this;
+    if (!this.$$phase && !this.$$asyncQueue.length){
+        setTimeout(function(){
+            if (self.$$asyncQueue.length){
+                self.$digest();
+            }
+        }, 0);
+    }
+
     this.$$asyncQueue.push({
         scope: this,//related to scope inheritance
         expression: expr
@@ -103,4 +119,15 @@ Scope.prototype.$$areEqual = function(newValue, oldValue, valueEq){
         return newValue === oldValue || isBothNaN;
     }
 
+};
+
+Scope.prototype.$$beginPhase = function(phase){
+    if (this.$$phase){
+        throw this.$$phase + " already in progress";
+    }
+
+    this.$$phase = phase;
+};
+Scope.prototype.$$clearPhase = function(){
+    this.$$phase = null;
 };
