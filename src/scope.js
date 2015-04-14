@@ -7,6 +7,8 @@
 function Scope(){
     this.$$watchers = [];
     this.$$lastDirtyWatch = null;
+
+    this.$$asyncQueue = [];
 }
 
 function initWatchVal(){}
@@ -55,13 +57,18 @@ Scope.prototype.$digest = function(){
     //每次digest都清空lastDirty
     this.$$lastDirtyWatch = null;
     do{
+        while(this.$$asyncQueue.length){
+            var asyncTask = this.$$asyncQueue.shift();
+            asyncTask.scope.$eval(asyncTask.expression);
+        }
+
         dirty = this.$$digestOnce();
 
         //到达脏检测次数限制，放弃本次脏检测并抛出异常
-        if (dirty && !(ttl--)){
+        if ((dirty || this.$$asyncQueue.length) && !(ttl--)){
             throw new Error("10 digest reached");
         }
-    }while(dirty);
+    }while(dirty || this.$$asyncQueue.length);
 };
 Scope.prototype.$eval = function(expr, arg){
     return expr(this, arg);
@@ -73,6 +80,13 @@ Scope.prototype.$apply = function(expr){
     }finally{
         this.$digest();
     }
+};
+
+Scope.prototype.$evalAsync = function(expr){
+    this.$$asyncQueue.push({
+        scope: this,//related to scope inheritance
+        expression: expr
+    });
 };
 
 Scope.prototype.$$areEqual = function(newValue, oldValue, valueEq){
