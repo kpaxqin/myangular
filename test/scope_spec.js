@@ -460,6 +460,125 @@ describe("Scope", function(){
                 done();
             });
         });
+
+        it("$applyAsync", function(done){
+            scope.aValue = "abc";
+            scope.counter = 0;
+
+            scope.$watch(
+                function(scope){
+                    return scope.aValue;
+                },
+                function(newValue, oldValue, scope){
+                    scope.counter++;
+                }
+            );
+
+            scope.$digest();
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "ddd";
+            });
+
+            expect(scope.counter).toBe(1);
+
+            setTimeout(function(){
+                expect(scope.counter).toBe(2);
+                done();
+            }, 50);
+        });
+
+        it ("never call $applyAsync in the same digest cycle", function(done){
+            scope.aValue = 1;
+
+            scope.applyAsyncCalled = false;
+
+            scope.$watch(
+                function(scope){ return scope.aValue;},
+                function(newValue, oldValue, scope){
+                    scope.$applyAsync(function(scope){
+                        scope.applyAsyncCalled = true;
+                    });
+                }
+            );
+
+            scope.$digest();
+
+            expect(scope.applyAsyncCalled).toBe(false);
+
+            setTimeout(function(){
+                expect(scope.applyAsyncCalled).toBe(true);
+                done();
+            }, 50)
+
+        });
+
+        it("coalesces multiple $applyAsync", function(done){
+            scope.counter = 0;
+
+            scope.$watch(
+                function(){
+                    scope.counter++;
+                    return scope.aValue;
+                },
+                function(){
+                }
+            );
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "a";
+            });
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "b";
+            });
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "c";
+            });
+
+
+            setTimeout(function(){
+                expect(scope.counter).toBe(2);//当此case失败时，实际counter数为 2 + applyAsync调用次数，由于while处在$apply中，因此脏的digest只有一次（计数+2），此后每次空的$apply都导致一次空digest（计数+1）
+                done();
+            }, 50);
+        });
+
+        it("cancel timeout and execute immediatly if digested first", function(done){
+            scope.counter = 0;
+
+            scope.$watch(
+                function(){
+                    scope.counter++;
+                    return scope.aValue;
+                },
+                function(){
+                }
+            );
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "a";
+            });
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "b";
+            });
+
+            scope.$applyAsync(function(scope){
+                scope.aValue = "c";
+            });
+
+            scope.$digest();
+
+            expect(scope.counter).toBe(2);
+
+            expect(scope.aValue).toBe("c");
+
+
+            setTimeout(function(){
+                expect(scope.counter).toBe(2);done();
+            }, 50);
+        });
     });
 
 

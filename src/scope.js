@@ -9,6 +9,9 @@ function Scope(){
     this.$$lastDirtyWatch = null;
 
     this.$$asyncQueue = [];
+
+    this.$$applyAsyncQueue = [];
+    this.$$applyAsyncId = null;
 }
 
 function initWatchVal(){}
@@ -58,6 +61,11 @@ Scope.prototype.$digest = function(){
 
     //每次digest都清空lastDirty
     this.$$lastDirtyWatch = null;
+
+    if(this.$$applyAsyncId){
+        clearTimeout(this.$$applyAsyncId);
+        this.$$flushApplyAsync();
+    }
     do{
         while(this.$$asyncQueue.length){
             var asyncTask = this.$$asyncQueue.shift();
@@ -105,6 +113,24 @@ Scope.prototype.$evalAsync = function(expr){
     });
 };
 
+Scope.prototype.$applyAsync = function(expr){
+    var self = this;
+
+    this.$$applyAsyncQueue.push(function(){
+        self.$eval(expr);
+    });
+
+    if (!this.$$applyAsyncId){
+        this.$$applyAsyncId = setTimeout(function(){
+            self.$apply(function(){
+                self.$$flushApplyAsync();
+            });
+
+        }, 0);
+    }
+
+};
+
 Scope.prototype.$$areEqual = function(newValue, oldValue, valueEq){
     if (valueEq){
         return _.isEqual(newValue, oldValue);
@@ -131,3 +157,10 @@ Scope.prototype.$$beginPhase = function(phase){
 Scope.prototype.$$clearPhase = function(){
     this.$$phase = null;
 };
+
+Scope.prototype.$$flushApplyAsync = function(){
+    while (this.$$applyAsyncQueue.length){
+        this.$$applyAsyncQueue.shift()();
+    }
+    this.$$applyAsyncId = null;
+}
